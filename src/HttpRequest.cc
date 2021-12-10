@@ -15,13 +15,14 @@ using namespace std::chrono_literals;
 
 static const int kBufferSize = 65535;
 
+// TODO: decode url
 bool HttpRequest::parse(std::string &remaining, Server *const server,
                         const int fd) {
   char recv_buffer[kBufferSize], process_buffer[kBufferSize];
 
   int size_left_from_socket;
   ioctl(fd, FIONREAD, &size_left_from_socket);
-  int64_t recv_cnt = remaining.length(), new_recv_cnt = 0;  // FIX: \0 in body
+  int64_t recv_cnt = remaining.length(), new_recv_cnt = 0;
   if (size_left_from_socket)
     recv_cnt += new_recv_cnt = recv(fd, recv_buffer, kBufferSize, 0);
   if (recv_cnt < 0) {
@@ -34,9 +35,9 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
   } else if (recv_cnt == 0) {
     return false;
   }
-  recv_buffer[new_recv_cnt] = '\0';
+  std::string real_recv_buffer(recv_buffer, new_recv_cnt);
   std::stringstream recv_ss;
-  recv_ss << remaining << recv_buffer;
+  recv_ss << remaining << real_recv_buffer;
 
   // Request-Line
   recv_ss.getline(process_buffer, kBufferSize);
@@ -100,7 +101,10 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
       !this->headers.count("Content-Length")) {
     if (this->method == HttpMethod::GET) {
       this->body = "";
-      recv_ss >> remaining;
+      const auto remaining_length = recv_cnt - recv_ss.tellg();
+      char remaining_buffer[remaining_length];
+      recv_ss.readsome(remaining_buffer, remaining_length);
+      remaining = std::string(remaining_buffer, remaining_length);
       server->logger.Info(info_ss.str());
       return true;
     }
@@ -117,7 +121,11 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
     recv_ss.readsome(buf, content_length);
     buf[content_length] = '\0';
     this->body = buf;
-    recv_ss >> remaining;
+    const auto remaining_length = recv_cnt - recv_ss.tellg();
+    char remaining_buffer[remaining_length];
+    recv_ss.readsome(remaining_buffer, remaining_length);
+    remaining = std::string(remaining_buffer, remaining_length);
+    server->logger.Info(info_ss.str());
     return true;
   }
   recv_ss >> this->body;
