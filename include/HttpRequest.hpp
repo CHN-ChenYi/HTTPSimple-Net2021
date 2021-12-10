@@ -31,6 +31,16 @@ struct HttpRequest {
 
  private:
   friend Router;
+
+  /**
+   * @brief Parse a HTTP request from a socket
+   *
+   * @param remaining unprocessed bytes of the socket (the last recv() gets more
+   * bytes than necessary)
+   * @param server the server
+   * @param fd the file descriptor of the socket
+   * @return whether get a request successfully
+   */
   bool parse(std::string &remaining, Server *const server, const int fd);
 };
 

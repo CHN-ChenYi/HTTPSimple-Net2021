@@ -3,6 +3,12 @@
 #include <string>
 #include <unordered_map>
 
+/**
+ * @brief Decode a URL string
+ *
+ * @param src the URL string
+ * @return the decoded string
+ */
 std::string UrlDecode(const std::string &src) {
   std::string ret;
   char ch;
@@ -22,6 +28,12 @@ std::string UrlDecode(const std::string &src) {
   return (ret);
 }
 
+/**
+ * @brief Docode a x-www-form-urlencoded string
+ *
+ * @param src the form string
+ * @return the form
+ */
 auto DecodeXWWWFormUrlencoded(std::string &src) {
   std::unordered_map<std::string, std::string> ret;
   auto delimiter = src.find_first_of('=');

@@ -37,14 +37,15 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
     }
   }
   recv_cnt += new_recv_cnt;
-  if (recv_cnt == 0) {
+  if (recv_cnt == 0) {  // nothing to parse
     return false;
   }
-  std::string real_recv_buffer(recv_buffer, new_recv_cnt);
+  std::string real_recv_buffer(
+      recv_buffer, new_recv_cnt);  // use string to prevent bugs caused by /0
   std::stringstream recv_ss;
   recv_ss << remaining << real_recv_buffer;
 
-  // Request-Line
+  // HTTP Request-Line
   recv_ss.getline(process_buffer, kBufferSize);
   std::stringstream proc_ss(process_buffer);
   std::string method, path, version;
@@ -71,7 +72,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
     this->method = HttpMethod::CONNECT;
   } else if (method == "PATCH") {
     this->method = HttpMethod::PATCH;
-  } else {
+  } else {  // unknown method
     std::stringstream ss;
     ss << '[' << server->client_addrs_[fd] << "] Unknown method: " << method;
     server->logger.Error(ss.str());
@@ -102,10 +103,11 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
                         1);  // remove \r
   }
 
-  // body
+  // HTTP Content
   if (this->headers.count("Transfer-Encoding") ||
       !this->headers.count("Content-Length")) {
-    if (this->method == HttpMethod::GET) {
+    if (this->method == HttpMethod::GET) {  // GET can have no content and no
+                                            // Content-Length in headers
       this->body = "";
       const auto remaining_length = recv_cnt - recv_ss.tellg();
       char remaining_buffer[remaining_length];
@@ -123,11 +125,11 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
     return false;
   }
   int64_t content_length = std::stoll(this->headers["Content-Length"]);
-  if (recv_cnt - recv_ss.tellg() >= content_length) {
+  if (recv_cnt - recv_ss.tellg() >=
+      content_length) {  // recv some bytes of the following requests
     char buf[content_length + 1];
     recv_ss.readsome(buf, content_length);
-    buf[content_length] = '\0';
-    this->body = buf;
+    this->body = std::string(buf, content_length);
     const auto remaining_length = recv_cnt - recv_ss.tellg();
     char remaining_buffer[remaining_length];
     recv_ss.readsome(remaining_buffer, remaining_length);
@@ -135,18 +137,23 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
     server->logger.Info(info_ss.str());
     return true;
   }
-  recv_ss >> this->body;
-  content_length -= this->body.length();
+  // put all the remaining data of the buffer to the body
+  const auto remaining_length = recv_cnt - recv_ss.tellg();
+  recv_ss.readsome(recv_buffer, remaining_length);
+  this->body = std::string(recv_buffer, remaining_length);
+  content_length -= remaining_length;
   recv_cnt = new_recv_cnt = 0;
+  // need more recv to get all the content
   while (content_length > 0) {
-    const auto recv_chunk_size = std::min<size_t>(content_length, kBufferSize);
-    for (int i = 0; i < 10; i++) {
+    const auto recv_chunk_size = std::min<size_t>(
+        content_length, kBufferSize);  // the size of the data to recv
+    for (int i = 0; i < 10; i++) {     // try 10 times
       recv_cnt = recv(fd, recv_buffer, recv_chunk_size, 0);
       if (recv_cnt == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {  // no data available now
           std::this_thread::sleep_for(200ms);
           continue;
-        } else {
+        } else {  // encountered error
           std::stringstream ss;
           ss << '[' << server->client_addrs_[fd]
              << "] Content recv() failed, errno: " << errno << std::endl;
@@ -156,10 +163,10 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
           return false;
         }
       } else {
-        break;
+        break;  // received data
       }
     }
-    if (recv_cnt == 0) {
+    if (recv_cnt == 0) {  // recv nothing
       std::stringstream ss;
       ss << '[' << server->client_addrs_[fd]
          << "] Request body shorter than expected: " << content_length;
@@ -169,12 +176,12 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
       return false;
     }
     new_recv_cnt = std::min<size_t>(recv_cnt, content_length);
-    this->body += std::string(recv_buffer, new_recv_cnt);
+    this->body += std::string(
+        recv_buffer, new_recv_cnt);  // append the received data to the body
     content_length -= new_recv_cnt;
   }
-
-  remaining = std::string(recv_buffer + new_recv_cnt, recv_cnt - new_recv_cnt);
-
+  remaining = std::string(recv_buffer + new_recv_cnt,
+                          recv_cnt - new_recv_cnt);  // data of the next request
   server->logger.Info(info_ss.str());
   return true;
 }

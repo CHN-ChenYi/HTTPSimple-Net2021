@@ -48,21 +48,21 @@ void HttpResponse::SetBody(const std::filesystem::path&& filepath) {
 
 bool HttpResponse::SendRequest(Server* const server, HttpStatusCode status_code,
                                const int& fd) {
-  // Status-Line
+  // HTTP Status-Line
   std::stringstream ss;
   ss << http_version_string << ' ';
   ss << http_status_code_string.at(status_code) << "\r\n";
 
-  // Header
+  // HTTP Header
   for (const auto& header : headers)
     ss << header.first << ": " << header.second << "\r\n";
 
   ss << "\r\n";
 
-  // Body
-  if (filepath.empty()) {
+  // HTTP Content
+  if (filepath.empty()) {  // content in memory
     ss << body;
-  } else {
+  } else {  // content in file
     std::ifstream file(filepath);
     ss << file.rdbuf();
     file.close();
@@ -70,24 +70,25 @@ bool HttpResponse::SendRequest(Server* const server, HttpStatusCode status_code,
 
   const auto response = ss.str();
 
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 10; i++) {  // try to send the response 10 times
     const auto ret = send(fd, reinterpret_cast<const void*>(response.data()),
                           response.size(), 0);
     if (ret == -1) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {  // can't send now
         std::this_thread::sleep_for(200ms);
         continue;
-      } else {
+      } else {  // encountered error
         std::stringstream error_ss;
         error_ss << '[' << server->client_addrs_[fd]
                  << "] send() failed, errno: " << errno;
         server->logger.Error(error_ss.str());
         return false;
       }
-    } else {
+    } else {  // sent successfully
       return true;
     }
   }
+  // sent failed after 10 retries
   std::stringstream error_ss;
   error_ss << '[' << server->client_addrs_[fd]
            << "] send() failed after 10 retries";

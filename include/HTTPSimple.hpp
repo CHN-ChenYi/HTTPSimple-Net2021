@@ -14,7 +14,7 @@
 #include "TaskQueue.hpp"
 #include "ThreadPool.hpp"
 
-using HandlerFunc =
+using ControllerFunc =
     std::function<void(const HttpRequestPtr&&,
                        std::function<void(const HttpResponsePtr&,
                                           const HttpStatusCode&)>&& callback)>;
@@ -24,23 +24,57 @@ class Server;
 class Router : public TaskQueue<int, void> {
  public:
   Router(Server* const server);
+
+  /**
+   * @brief Set the thread number
+   *
+   * @param num the thread number
+   */
   void SetThreadNum(const uint32_t& num);
-  void RegisterHandler(const HttpMethod& method, std::string path,
-                       const HandlerFunc&& func);
+
+  /**
+   * @brief register a controller
+   *
+   * @param method the HTTP method
+   * @param path the URL path
+   * @param func the controller function
+   */
+  void RegisterController(const HttpMethod& method, std::string path,
+                          const ControllerFunc&& func);
   void push(const int& fd);
 
  private:
   Server* const server_;
-  std::unordered_map<std::string, HandlerFunc> handlers_;
+  std::unordered_map<std::string, ControllerFunc> controllers_;
 };
 
 class Server {
  public:
   Server();
   Logger logger;
-  Server& RegisterHandler(const HttpMethod& method, const std::string& path,
-                          const HandlerFunc&& func);
+
+  /**
+   * @brief register a controller
+   *
+   * @param method the HTTP method
+   * @param path the URL path
+   * @param func the controller function
+   */
+  Server& RegisterController(const HttpMethod& method, const std::string& path,
+                             const ControllerFunc&& func);
+
+  /**
+   * @brief Set the thread number
+   *
+   * @param num the thread number
+   */
   Server& SetThreadNum(const uint32_t& num);
+
+  /**
+   * @brief Start the server (It's a blocking function)
+   *
+   * @param port the listening port
+   */
   void Listen(const uint16_t& port);
 
  private:

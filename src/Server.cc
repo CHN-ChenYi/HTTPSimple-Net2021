@@ -11,10 +11,10 @@
 
 Server::Server() { router_ = std::make_unique<Router>(this); }
 
-Server& Server::RegisterHandler(const HttpMethod& method,
-                                const std::string& path,
-                                const HandlerFunc&& func) {
-  router_->RegisterHandler(method, path, std::move(func));
+Server& Server::RegisterController(const HttpMethod& method,
+                                   const std::string& path,
+                                   const ControllerFunc&& func) {
+  router_->RegisterController(method, path, std::move(func));
   return *this;
 }
 
@@ -60,16 +60,16 @@ void Server::Listen(const uint16_t& port) {
   ss << "Listening on port " << port;
   logger.Info(ss.str());
 
-  // init epoll
+  // init epoll listening thread
   const int epfd = epoll_create1(0);
   task_parser_ = std::make_unique<std::thread>([this, epfd]() {
     epoll_event events[kMaxEpollEvents];
     for (;;) {
       const int num_ready = epoll_wait(epfd, events, kMaxEpollEvents, -1);
       for (int i = 0; i < num_ready; i++) {
-        if (events[i].events & EPOLLIN) {
+        if (events[i].events & EPOLLIN) {  // incoming request
           router_->push(events[i].data.fd);
-        } else {
+        } else {  // encounter error
           close(events[i].data.fd);
           std::stringstream ss;
           ss << client_addrs_[events[i].data.fd] << " disconnected";
@@ -91,6 +91,7 @@ void Server::Listen(const uint16_t& port) {
       ss << "accept() failed! errno: " << errno;
       logger.Error(ss.str());
     }
+    // log
     char addr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, addr, sizeof(addr));
     std::stringstream ss;
@@ -99,7 +100,7 @@ void Server::Listen(const uint16_t& port) {
     std::stringstream log_ss;
     log_ss << '[' << ss.str() << "] connected (fd = " << comfd << ")";
     logger.Info(log_ss.str());
-
+    // set to non-blocking mode
     int flags;
     flags = fcntl(comfd, F_GETFL, 0);
     if (flags < 0) {
@@ -120,7 +121,7 @@ void Server::Listen(const uint16_t& port) {
       client_addrs_.erase(comfd);
       continue;
     }
-
+    // add to epoll list
     epoll_event event;
     event.events = EPOLLIN | EPOLLET;
     event.data.fd = comfd;
