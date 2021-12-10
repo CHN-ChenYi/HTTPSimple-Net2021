@@ -1,6 +1,5 @@
 #include "HttpRequest.hpp"
 
-#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -15,24 +14,29 @@ using namespace std::chrono_literals;
 
 static const int kBufferSize = 65535;
 
+extern int errno;
+
 // TODO: decode url
 bool HttpRequest::parse(std::string &remaining, Server *const server,
                         const int fd) {
   char recv_buffer[kBufferSize], process_buffer[kBufferSize];
 
-  int size_left_from_socket;
-  ioctl(fd, FIONREAD, &size_left_from_socket);
   int64_t recv_cnt = remaining.length(), new_recv_cnt = 0;
-  if (size_left_from_socket)
-    recv_cnt += new_recv_cnt = recv(fd, recv_buffer, kBufferSize, 0);
-  if (recv_cnt < 0) {
-    std::stringstream ss;
-    ss << '[' << server->client_addrs_[fd]
-       << "] Request line recv() failed, errno: " << errno << std::endl;
-    server->logger.Error(ss.str());
-    close(fd);
-    return false;
-  } else if (recv_cnt == 0) {
+  new_recv_cnt = recv(fd, recv_buffer, kBufferSize, 0);
+  if (new_recv_cnt == -1) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {  // no data available
+      new_recv_cnt = 0;
+    } else {
+      std::stringstream ss;
+      ss << '[' << server->client_addrs_[fd]
+         << "] Request line recv() failed, errno: " << errno << std::endl;
+      server->logger.Error(ss.str());
+      close(fd);
+      return false;
+    }
+  }
+  recv_cnt += new_recv_cnt;
+  if (recv_cnt == 0) {
     return false;
   }
   std::string real_recv_buffer(recv_buffer, new_recv_cnt);
@@ -134,11 +138,24 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
   while (content_length > 0) {
     const auto recv_chunk_size = std::min<size_t>(content_length, kBufferSize);
     for (int i = 0; i < 10; i++) {
-      ioctl(fd, FIONREAD, &size_left_from_socket);
-      if (size_left_from_socket) break;
-      std::this_thread::sleep_for(200ms);
+      recv_cnt = recv(fd, recv_buffer, recv_chunk_size, 0);
+      if (recv_cnt == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(200ms);
+          continue;
+        } else {
+          std::stringstream ss;
+          ss << '[' << server->client_addrs_[fd]
+             << "] Content recv() failed, errno: " << errno << std::endl;
+          server->logger.Error(ss.str());
+          close(fd);
+          return false;
+        }
+      } else {
+        break;
+      }
     }
-    if (size_left_from_socket == 0) {
+    if (recv_cnt == 0) {
       std::stringstream ss;
       ss << '[' << server->client_addrs_[fd]
          << "] Request body shorter than expected: " << content_length;
@@ -146,17 +163,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
       close(fd);
       return false;
     }
-    recv_cnt = recv(fd, recv_buffer, recv_chunk_size, 0);
-    recv_buffer[recv_cnt] = '\0';
     new_recv_cnt = std::min<size_t>(recv_cnt, content_length);
-    if (recv_cnt < 0) {
-      std::stringstream ss;
-      ss << '[' << server->client_addrs_[fd]
-         << "] Content recv() failed, errno: " << errno;
-      server->logger.Error(ss.str());
-      close(fd);
-      return false;
-    }
     this->body += std::string(recv_buffer, new_recv_cnt);
     content_length -= new_recv_cnt;
   }

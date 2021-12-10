@@ -2,10 +2,14 @@
 
 #include <sys/socket.h>
 
+#include <chrono>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #include "HTTPSimple.hpp"
+
+using namespace std::chrono_literals;
 
 const std::string HttpResponse::http_version_string = std::string("HTTP/1.1");
 const std::unordered_map<HttpStatusCode, std::string>
@@ -65,13 +69,28 @@ bool HttpResponse::SendRequest(Server* const server, HttpStatusCode status_code,
   }
 
   const auto response = ss.str();
-  if (!~send(fd, reinterpret_cast<const void*>(response.data()),
-             response.size(), 0)) {
-    std::stringstream error_ss;
-    error_ss << '[' << server->client_addrs_[fd]
-             << "] send() failed, errno: " << errno;
-    server->logger.Error(error_ss.str());
-    return false;
+
+  for (int i = 0; i < 10; i++) {
+    const auto ret = send(fd, reinterpret_cast<const void*>(response.data()),
+                          response.size(), 0);
+    if (ret == -1) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        std::this_thread::sleep_for(200ms);
+        continue;
+      } else {
+        std::stringstream error_ss;
+        error_ss << '[' << server->client_addrs_[fd]
+                 << "] send() failed, errno: " << errno;
+        server->logger.Error(error_ss.str());
+        return false;
+      }
+    } else {
+      return true;
+    }
   }
-  return true;
+  std::stringstream error_ss;
+  error_ss << '[' << server->client_addrs_[fd]
+           << "] send() failed after 10 retries";
+  server->logger.Error(error_ss.str());
+  return false;
 }

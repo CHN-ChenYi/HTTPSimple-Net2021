@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -98,6 +99,25 @@ void Server::Listen(const uint16_t& port) {
     std::stringstream log_ss;
     log_ss << '[' << ss.str() << "] connected (fd = " << comfd << ")";
     logger.Info(log_ss.str());
+
+    int flags;
+    flags = fcntl(comfd, F_GETFL, 0);
+    if (flags < 0) {
+      std::stringstream log_ss;
+      log_ss << '[' << ss.str() << "] fcntl(F_GETFL) failed (fd = " << comfd
+             << ")";
+      logger.Error(log_ss.str());
+      close(comfd);
+      continue;
+    }
+    if (fcntl(comfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+      std::stringstream log_ss;
+      log_ss << '[' << ss.str() << "] fcntl(F_SETFL) failed (fd = " << comfd
+             << ")";
+      logger.Error(log_ss.str());
+      close(comfd);
+      continue;
+    }
 
     epoll_event event;
     event.events = EPOLLIN | EPOLLET;
