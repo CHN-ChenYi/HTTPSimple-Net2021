@@ -1,7 +1,7 @@
 #include <iostream>
 #include <thread>
 
-#include "./example/handlers.hpp"
+#include "./example/controllers.hpp"
 #include "HTTPSimple.hpp"
 
 int main(int argc, char** argv) {
