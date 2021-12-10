@@ -32,6 +32,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
          << "] Request line recv() failed, errno: " << errno << std::endl;
       server->logger.Error(ss.str());
       close(fd);
+      server->client_addrs_.erase(fd);
       return false;
     }
   }
@@ -75,6 +76,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
     ss << '[' << server->client_addrs_[fd] << "] Unknown method: " << method;
     server->logger.Error(ss.str());
     close(fd);
+    server->client_addrs_.erase(fd);
     return false;
   }
   // path
@@ -117,6 +119,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
        << "] Unknown Transfer-Encoding or Content-Length";
     server->logger.Error(ss.str());
     close(fd);
+    server->client_addrs_.erase(fd);
     return false;
   }
   int64_t content_length = std::stoll(this->headers["Content-Length"]);
@@ -149,6 +152,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
              << "] Content recv() failed, errno: " << errno << std::endl;
           server->logger.Error(ss.str());
           close(fd);
+          server->client_addrs_.erase(fd);
           return false;
         }
       } else {
@@ -161,6 +165,7 @@ bool HttpRequest::parse(std::string &remaining, Server *const server,
          << "] Request body shorter than expected: " << content_length;
       server->logger.Error(ss.str());
       close(fd);
+      server->client_addrs_.erase(fd);
       return false;
     }
     new_recv_cnt = std::min<size_t>(recv_cnt, content_length);

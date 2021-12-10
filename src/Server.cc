@@ -108,6 +108,7 @@ void Server::Listen(const uint16_t& port) {
              << ")";
       logger.Error(log_ss.str());
       close(comfd);
+      client_addrs_.erase(comfd);
       continue;
     }
     if (fcntl(comfd, F_SETFL, flags | O_NONBLOCK) < 0) {
@@ -116,6 +117,7 @@ void Server::Listen(const uint16_t& port) {
              << ")";
       logger.Error(log_ss.str());
       close(comfd);
+      client_addrs_.erase(comfd);
       continue;
     }
 

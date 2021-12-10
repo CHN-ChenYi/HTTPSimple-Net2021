@@ -83,9 +83,6 @@ class ThreadPool {
    *
    */
   ThreadPool() {
-#ifdef _DEBUG
-    std::cerr << "Thread pool thread number: " << 1 << std::endl;
-#endif
     Init();
     resize(1);
   }
@@ -96,9 +93,6 @@ class ThreadPool {
    * @param thread_num the number of threads in the pool
    */
   ThreadPool(const int &thread_num) {
-#ifdef _DEBUG
-    std::cerr << "Thread pool thread number: " << thread_num << std::endl;
-#endif
     Init();
     resize(thread_num);
   }
@@ -144,6 +138,10 @@ class ThreadPool {
         flags_.resize(thread_num);
       }
     }
+#ifdef _DEBUG
+    std::cerr << "Thread pool thread number changed to " << thread_num
+              << std::endl;
+#endif
   }
 
   /**
