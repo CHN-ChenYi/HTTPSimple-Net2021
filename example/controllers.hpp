@@ -1,12 +1,21 @@
 #include "HTTPSimple.hpp"
 #include "XForm.hpp"
 
-void test(const HttpRequestPtr&&,
+void test_html(const HttpRequestPtr&&,
           std::function<void(const HttpResponsePtr&,
                              const HttpStatusCode& status_code)>&& callback) {
   HttpResponsePtr resp = std::make_unique<HttpResponse>();
   resp->SetContentType("text/html");
   resp->SetBody("./example/test.html");
+  callback(resp, HttpStatusCode::OK);
+};
+
+void test_txt(const HttpRequestPtr&&,
+          std::function<void(const HttpResponsePtr&,
+                             const HttpStatusCode& status_code)>&& callback) {
+  HttpResponsePtr resp = std::make_unique<HttpResponse>();
+  resp->SetContentType("text/txt");
+  resp->SetBody("./example/test.txt");
   callback(resp, HttpStatusCode::OK);
 };
 

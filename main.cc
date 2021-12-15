@@ -15,7 +15,8 @@ int main(int argc, char** argv) {
 
   Server server;
   server.SetThreadNum(core_num ? core_num : 1)
-      .RegisterController(HttpMethod::GET, "/", test)
+      .RegisterController(HttpMethod::GET, "/", test_html)
+      .RegisterController(HttpMethod::GET, "/txt", test_txt)
       .RegisterController(HttpMethod::GET, "/noimg", noimg)
       .RegisterController(HttpMethod::GET, "/img/logo.jpg", img)
       .RegisterController(HttpMethod::POST, "/dopost", dopost)
