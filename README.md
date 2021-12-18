@@ -34,3 +34,13 @@ int main() {
 ```
 
 For more examples, please refer to the `example` folder and `main.cc`.
+
+## Compile and Run
+
+Requires C++17.
+
+``` Bash
+cmake -B ./build -DCMAKE_BUILD_TYPE=Release .
+make -C ./build -j
+./build/HTTPSimple
+```
